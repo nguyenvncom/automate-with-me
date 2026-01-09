@@ -3,27 +3,28 @@
 ######## ######## ######## ######## DATA COLLECTION ######## ######## ######## ########
 # SERVERS="afx@10.9.8.254 afx@10.9.10.141"
 SERVERS="nguyenvn@192.168.50.143 nguyenvn@192.168.50.142"
-LOG_PATH=/var/log/syslog
+LOG_PATH=/var/log
+LOG_NAME=syslog
 TMP_DIR=/tmp/data
-KEYWORD_ERROR=ErRoR
-KEYWORD_FIRST=2026-01-08
+DATE=`date -d "yesterday" +"%Y%m%d"`
+KEYWORD_ERROR=error
+KEYWORD=`date -d "yesterday" +"%Y-%m-%d"`
+
 COUNT=1
 
+mkdir -p $TMP_DIR
+
 for SERVER in $SERVERS; do
-    # CHECK SSH STATUS
     if ssh "$SERVER" true 2>/dev/null; then
-        echo "SSH $SERVER successfully"
-        
         # USE grep COMMAND
-        ssh $SERVER "grep '$KEYWORD_FIRST' $LOG_PATH" > $TMP_DIR/syslog-$COUNT.txt
-        # ssh $SERVER "grep '$KEYWORD_FIRST' $LOG_PATH | gzip -c" > $TMP_DIR/syslog-$COUNT.gz
+        ssh $SERVER "grep '$KEYWORD' $LOG_PATH/$LOG_NAME" > $TMP_DIR/$DATE-$LOG_NAME-$COUNT.log
+        # ssh $SERVER "grep '$KEYWORD' $LOG_PATH/$LOG_NAME | zip -c" > $TMP_DIR/$LOG_NAME-$COUNT.zip
 
         # USE awk COMMAND
-        # ssh $SERVER "awk '\$0 >= \"$KEYWORD_FIRST\"' $LOG_PATH" > $TMP_DIR/syslog-$COUNT.txt
-        # ssh $SERVER "awk '\$0 >= \"$KEYWORD_FIRST\"' $LOG_PATH | gzip -c" > $TMP_DIR/syslog-$COUNT.gzip
-
-        # ssh $SERVER "awk '\$0 >= \"$KEYWORD_FIRST\"' $LOG_PATH | grep -i $KEYWORD_ERROR" > $TMP_DIR/syslog-$COUNT.txt
-        # ssh $SERVER "awk '\$0 >= \"$KEYWORD_FIRST\"' $LOG_PATH | grep -i $KEYWORD_ERROR | gzip -c" > $TMP_DIR/syslog-$COUNT.txt.gz
+        # ssh $SERVER "awk '\$0 >= \"$KEYWORD\"' $LOG_PATH/$LOG_NAME" > $TMP_DIR/$LOG_NAME-$COUNT.log
+        # ssh $SERVER "awk '\$0 >= \"$KEYWORD\"' $LOG_PATH/$LOG_NAME | zip -c" > $TMP_DIR/$LOG_NAME-$COUNT.zip
+        # ssh $SERVER "awk '\$0 >= \"$KEYWORD\"' $LOG_PATH/$LOG_NAME | grep -i $KEYWORD_ERROR" > $TMP_DIR/$LOG_NAME-$COUNT.log
+        # ssh $SERVER "awk '\$0 >= \"$KEYWORD\"' $LOG_PATH/$LOG_NAME | grep -i $KEYWORD_ERROR | zip -c" > $TMP_DIR/$LOG_NAME-$COUNT.zip
     else
         echo "SSH $SERVER failed"
     fi
@@ -78,12 +79,7 @@ SIGNATURE=$(echo -n "$SIGN_INPUT" \
 rm -f "$TMP_KEY"
 JWT="${SIGN_INPUT}.${SIGNATURE}"
 
-# EXCHANGE JWT FOR ACCESS TOKEN | FROM AnhTT
-TOKEN_RESPONSE=$(curl -s -X POST https://oauth2.googleapis.com/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=$JWT")
-
-# FROM ChatGPT
+# EXCHANGE JWT FOR ACCESS TOKEN
 TOKEN_RESPONSE=$(curl -s -X POST https://oauth2.googleapis.com/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer" \
@@ -103,8 +99,14 @@ fi
 ######## ######## ######## ######## UPLOAD ######## ######## ######## ########
 FOLDER_ID=0AJEIQBrRjSp7Uk9PVAO
 
-curl -s -X POST \
+echo "Uploading to Google Drive........................"
+
+for FILE in "$TMP_DIR/$DATE-$LOG_NAME*"; do
+    curl -s -X POST \
     "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true" \
     -H "Authorization: Bearer $ACCESS_TOKEN" \
-    -F "metadata={name:'${FILE_DATE}-mypage2.log', parents:['$FOLDER_ID']};type=application/json" \
-    -F "file=@$FINAL_LOG"
+    -F "metadata={name:'$(basename "$FILE")', parents:['$FOLDER_ID']};type=application/json" \
+    -F "file=@$FILE"
+done
+
+echo "Uploaded to Google Drive........................"
